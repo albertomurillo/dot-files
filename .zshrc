@@ -70,10 +70,7 @@ ZSH_THEME="robbyrussell"
 # Custom plugins may be added to $ZSH_CUSTOM/plugins/
 # Example format: plugins=(rails git textmate ruby lighthouse)
 # Add wisely, as too many plugins slow down shell startup.
-plugins=(
-  vscode
-  git
-)
+plugins=(git)
 
 source $ZSH/oh-my-zsh.sh
 
@@ -103,6 +100,9 @@ source $ZSH/oh-my-zsh.sh
 # alias zshconfig="mate ~/.zshrc"
 # alias ohmyzsh="mate ~/.oh-my-zsh"
 
+export PATH="$PATH:$HOME/bin"
+export PATH="$PATH:$HOME/.docker/bin"
+
 # Configure Golang
 export GOPATH=$HOME/go
 export GOBIN=$GOPATH/bin
@@ -131,9 +131,6 @@ function update() {
   rm -rf "$(brew --cache)"
 }
 
-# Enable BuildKit
-export DOCKER_BUILDKIT=1
-
 # dr: Short for docker run but deletes container at exit
 alias dr="docker run --rm -ti"
 
@@ -146,7 +143,7 @@ function docker_cleanup() {
 }
 
 function docker_scan() {
-  IMAGE=$1
+  local IMAGE=$1
   trivy image --exit-code 1 --severity HIGH,CRITICAL --ignore-unfixed "${IMAGE}"
 }
 
@@ -163,6 +160,7 @@ alias gl='git log --graph --pretty=format:"%Cred%h%Creset -%C(yellow)%d%Creset %
 
 # giturl: Open git repository in browser
 function giturl() {
+  local remote
   remote=$(git remote get-url origin)
   if [[ $remote =~ ^git:* ]]; then
     remote=${remote#git@}  # Remove git@
@@ -170,7 +168,7 @@ function giturl() {
     remote=${remote/://}   # Replace : with /
     remote=https://$remote # Convert to url
   fi
-  open $remote
+  open "$remote"
 }
 
 # kubectl pods
@@ -315,8 +313,15 @@ function aws_list_asgs() {
 function aws_list_instances() {
   aws ec2 describe-instances \
     --output=table \
-    --query "Reservations[].Instances[].{Name: Tags[?Key=='Name']|[0].Value, InstanceId: InstanceId, InstanceType: InstanceType, ImageId: ImageId, State: State.Name}" \
+    --query "Reservations[].Instances[].{Name: Tags[?Key=='Name'] |[0].Value, InstanceId: InstanceId, InstanceType: InstanceType, ImageId: ImageId, State: State.Name, LaunchTime: LaunchTime, PrivateIpAddress: PrivateIpAddress}" \
     --filters "Name=tag:Name,Values=*$1*"
+}
+
+function aws_list_instances_tags() {
+  aws ec2 describe-instances \
+    --output=table \
+    --query "Reservations[].Instances[].{Name: Tags[?Key=='Name']|[0].Value, InstanceId: InstanceId, InstanceType: InstanceType, ImageId: ImageId, State: State.Name}" \
+    --filters "Name=metadata-options.instance-metadata-tags,Values=*$1*"
 }
 
 function aws_list_instances_by_asg() {
@@ -332,7 +337,7 @@ function aws_delete_instance() {
 
 function aws_list_secrets() {
   cmd="aws secretsmanager list-secrets --output=table --query 'SecretList[][Name, KmsKeyId]'"
-  if [ ! -z $1 ];
+  if [ -n $1 ];
     then cmd="$cmd --filters \"Key=name,Values=$1\""
   fi
   eval $cmd
@@ -386,3 +391,9 @@ function aws_run_command_output() {
 	  --details \
 	  --query "CommandInvocations[].CommandPlugins[].{Status:Status,Output:Output}"
 }
+
+function aws-profile() {
+  export AWS_PROFILE=$1
+}
+
+alias retry='while [ $? -ne 0 ] ; do fc -e "#"; done'
